@@ -1,0 +1,16 @@
+[
+    { "frase": "quero adicionar uma tarefa", "intencao": "adicionar" },
+    { "frase": "me lembre de estudar", "intencao": "adicionar" },
+    { "frase": "criar novo compromisso", "intencao": "adicionar" },
+    { "frase": "quais são minhas tarefas", "intencao": "listar" },
+    { "frase": "mostrar minhas atividades", "intencao": "listar" },
+    { "frase": "ver as tarefas do dia", "intencao": "listar" },
+    { "frase": "concluir a tarefa com id 123", "intencao": "concluir" },
+    { "frase": "finalizar tarefa x", "intencao": "concluir" },
+    { "frase": "marcar tarefa como feita", "intencao": "concluir" },
+    { "frase": "oi", "intencao": "saudacao" },
+    { "frase": "olá, tudo bem?", "intencao": "saudacao" },
+    { "frase": "tchau", "intencao": "despedida" },
+    { "frase": "até mais", "intencao": "despedida" }
+  ]
+  

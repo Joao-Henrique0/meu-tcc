@@ -1,0 +1,14 @@
+[
+  {
+    "usuario": "quais são minhas tarefas",
+    "resposta": "Você pode visualizar suas tarefas na aba principal. (confiança: 0.77)",
+    "intencao": "listar",
+    "confianca": 0.77
+  },
+  {
+    "usuario": "criar novo compromisso",
+    "resposta": "Certo! Me diga a tarefa no formato: título - descrição - data e hora. (confiança: 0.83)",
+    "intencao": "adicionar",
+    "confianca": 0.83
+  }
+]

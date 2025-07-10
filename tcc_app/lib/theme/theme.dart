@@ -25,6 +25,13 @@ ThemeData lightMode = ThemeData(
     buttonColor: corP,
     textTheme: ButtonTextTheme.primary,
   ),
+  elevatedButtonTheme: ElevatedButtonThemeData(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: corP,
+      foregroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
+  ),
   floatingActionButtonTheme: const FloatingActionButtonThemeData(
     backgroundColor: corP,
   ),
@@ -49,7 +56,7 @@ ThemeData darkMode = ThemeData(
   colorScheme: const ColorScheme.dark(
     primary: Color.fromRGBO(76, 19, 248, 1),
     secondary: Color.fromARGB(255, 133, 255, 137),
-    tertiary: Colors.black,
+    tertiary: Color.fromARGB(255, 151, 152, 161),
   ),
 
   useMaterial3: true,
@@ -67,6 +74,13 @@ ThemeData darkMode = ThemeData(
   buttonTheme: const ButtonThemeData(
     buttonColor: Colors.deepPurple,
     textTheme: ButtonTextTheme.primary,
+  ),
+  elevatedButtonTheme: ElevatedButtonThemeData(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.deepPurple[700],
+      foregroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
   ),
   floatingActionButtonTheme: FloatingActionButtonThemeData(
     backgroundColor: Colors.deepPurple[700],

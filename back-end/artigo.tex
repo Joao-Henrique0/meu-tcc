@@ -1,0 +1,74 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{indentfirst}
+\usepackage{setspace}
+\usepackage{float}
+\usepackage{geometry}
+\usepackage{enumitem}
+
+\geometry{left=3cm,right=2cm,top=3cm,bottom=2cm}
+
+\title{\textbf{Desenvolvimento de um Aplicativo de Gerenciamento de Tarefas Integrado com Chatbot Utilizando Processamento de Linguagem Natural (NLP)}}
+\author{João Henrique Carvalho Soares \\
+Curso de Sistemas de Informação \\
+IFBA}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This article presents the development of a task management application integrated with a Natural Language Processing (NLP)-based chatbot and smart notification system. The project aims to provide users with an intuitive interface that allows them to add, query, update, and remove tasks using natural language commands, both by text and voice. The solution also includes configurable and personalized notifications, as well as integration with virtual assistants. The methodology employed follows an applied, qualitative, and experimental approach, using technologies such as Flutter, Python (with SpaCy and TensorFlow), and a RESTful API hosted in the cloud.
+\end{abstract}
+
+\begin{abstract}
+Este artigo apresenta o desenvolvimento de um aplicativo de gerenciamento de tarefas integrado com um chatbot baseado em Processamento de Linguagem Natural (NLP) e sistema de notificações inteligentes. O projeto visa proporcionar aos usuários uma interface intuitiva que permita a adição, consulta, atualização e remoção de tarefas utilizando comandos em linguagem natural, tanto por texto quanto por voz. A solução contempla também notificações configuráveis e personalizadas, além de integração com assistentes virtuais. A metodologia empregada segue uma abordagem aplicada, qualitativa e experimental, utilizando tecnologias como Flutter, Python (com SpaCy e TensorFlow) e uma API RESTful hospedada na nuvem.
+\end{abstract}
+
+\textbf{Palavras-chave:} Gerenciamento de Tarefas, Chatbot, NLP, Notificações, Flutter, Python.
+
+\onehalfspacing
+
+\section{Introdução}
+
+O aumento das demandas no cotidiano tem levado as pessoas a buscarem soluções para organização pessoal, a fim de otimizar seu tempo e aumentar a produtividade. Aplicativos de gerenciamento de tarefas se tornaram ferramentas indispensáveis, porém, muitos desses aplicativos ainda dependem exclusivamente de interações tradicionais, como menus e formulários, o que limita sua acessibilidade e a naturalidade da interação.
+
+Neste contexto, este trabalho propõe o desenvolvimento de um aplicativo de gerenciamento de tarefas que se diferencia por oferecer uma interface de interação por meio de um chatbot com capacidade de compreender linguagem natural, permitindo ao usuário criar, consultar, atualizar e excluir tarefas de maneira simples e intuitiva, utilizando comandos textuais ou verbais.
+
+Além disso, o sistema implementa notificações inteligentes, que auxiliam o usuário a se manter organizado, oferecendo lembretes personalizados com possibilidade de configuração de horários, repetição e encerramento automático das notificações após a conclusão das tarefas.
+
+\section{Metodologia}
+
+A pesquisa possui natureza aplicada, visando gerar conhecimento para a solução de problemas práticos relacionados à organização de tarefas pessoais. A abordagem metodológica adotada é qualitativa, permitindo a compreensão das necessidades dos usuários e a avaliação da efetividade da solução proposta. O caráter experimental se dá pela implementação e testes da aplicação em um ambiente real de uso.
+
+As etapas da metodologia estão descritas a seguir:
+
+\begin{itemize}
+    \item \textbf{Análise de Requisitos}: nesta fase foram levantados os requisitos funcionais, como cadastro, listagem, atualização e exclusão de tarefas, além de requisitos específicos para o chatbot, como reconhecimento de intenções e entendimento de linguagem natural. Também foram definidos os requisitos não funcionais, como responsividade, desempenho e segurança da aplicação.
+    
+    \item \textbf{Desenvolvimento Técnico}: a implementação foi dividida em três frentes. O front-end foi desenvolvido com Flutter, proporcionando uma interface amigável e compatível com dispositivos Android. O back-end foi construído em Python utilizando o framework Flask, oferecendo uma API RESTful que gerencia as operações sobre as tarefas, autenticação de usuários e comunicação com o chatbot. Para o processamento de linguagem natural, foi utilizado o SpaCy para pré-processamento dos dados e o TensorFlow para treinamento de um modelo de classificação de intenções, capaz de interpretar comandos dos usuários.
+    
+    \item \textbf{Integração e Testes}: após o desenvolvimento dos módulos, foi realizada a integração entre front-end, API e chatbot. Os testes contemplaram validações unitárias das funcionalidades, testes funcionais para garantir que as operações de tarefas ocorressem corretamente e testes de usabilidade, onde usuários interagiram com o chatbot e forneceram feedback para ajustes no modelo de NLP e na interface do aplicativo.
+\end{itemize}
+
+\section{Desenvolvimento}
+
+O desenvolvimento do sistema foi conduzido seguindo uma arquitetura modular e escalável, composta por três principais camadas:
+
+\subsection{Arquitetura do Sistema}
+
+\begin{itemize}
+    \item \textbf{Front-end}: desenvolvido em Flutter, permite uma experiência multiplataforma com uma interface limpa e objetiva. A interface foi projetada considerando princípios de usabilidade e acessibilidade, possibilitando que o usuário interaja tanto de forma tradicional (botões, formulários) quanto através do chatbot integrado.
+    
+    \item \textbf{Back-end}: a API RESTful foi construída em Flask, implementando rotas seguras com autenticação JWT, controle de usuários, e operações sobre as tarefas (CRUD). Além disso, a API gerencia a comunicação com o serviço de NLP e o sistema de notificações.
+    
+    \item \textbf{Chatbot com NLP}: utilizando TensorFlow, foi treinado um modelo de classificação de intenções baseado em dados organizados em JSON, contendo exemplos de frases que representam cada intenção (como adicionar, listar, atualizar ou excluir tarefas). O pré-processamento do texto é realizado com SpaCy, incluindo etapas como tokenização, lematização e remoção de stopwords. Isso permite que o chatbot interprete comandos como “Preciso levar o carro para revisão amanhã às 9h” e converta essa entrada em uma tarefa no sistema.
+\end{itemize}
+
+
+\end{document}

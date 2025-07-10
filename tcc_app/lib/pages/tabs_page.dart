@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:tcc_app/components/chat_provider.dart';
 import 'package:tcc_app/components/main_drawer.dart';
 import 'package:tcc_app/pages/chatbot_page.dart';
 import 'package:tcc_app/pages/tasks_page.dart';
@@ -32,7 +34,17 @@ class _TabsScreenState extends State<TabsScreen> {
       {
         'title': 'ChatBot',
         'screen': ChatbotScreen(),
-        'actions': [Center()],
+        'actions': [
+          IconButton(
+            icon: Icon(Icons.delete_forever),
+            onPressed: () {
+              Provider.of<ChatProvider>(
+                context,
+                listen: false,
+              ).clearAllMessages();
+            },
+          ),
+        ],
       },
     ];
   }
@@ -55,7 +67,7 @@ class _TabsScreenState extends State<TabsScreen> {
       body: _screens[_selectedScreenIndex]['screen'] as Widget,
       bottomNavigationBar: BottomNavigationBar(
         iconSize: 20,
-    
+
         backgroundColor: color,
         onTap: _selectScreen,
         unselectedItemColor: Colors.white,

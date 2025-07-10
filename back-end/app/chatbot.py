@@ -1,240 +1,235 @@
 import re
-from datetime import datetime, timedelta
-import uuid
-from .db import get_connection
-from .utils.nlp_helper import preprocess_text
+from datetime import datetime, time, timedelta, date
+from .nlp.intent_predictor import predict_intent
+import spacy
+from dateutil import parser as date_parser
 
-def handle_message(message):
-    tokens = preprocess_text(message)
+nlp = spacy.load("pt_core_news_sm")
+WEEKDAYS = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo']
 
-    if any(t in tokens for t in ["listar", "mostrar", "ver", "tarefas", "compromissos"]):
-        if match := re.search(r"(amanh\u00e3|hoje|dia \d{1,2})", message):
-            return list_tasks_by_date(match.group(1).lower())
-        return list_tasks()
+def handle_message(message, user_id):
+    intent, confidence = predict_intent(message)
+    print(f"Intent: {intent}, Confidence: {confidence}")
+    print(f"Message: {message}")
+    
+    if confidence < 0.6:
+        return {"intent": "desconhecido", "data": None, "error": "Desculpe, não entendi muito bem. Poderia reformular?"}
 
-    if any(t in tokens for t in ["atualizar", "editar", "modificar"]):
-        return update_task_by_title_and_date(message)
+    if intent == "adicionar_tarefa":
+        parsed_task = parse_task_from_natural_input(message)
+        return {
+            "intent": "adicionar_tarefa",
+            "data": parsed_task,
+            "error": None if parsed_task else "Não foi possível interpretar a tarefa."
+        }
 
-    if any(t in tokens for t in ["deletar", "remover", "apagar"]):
-        return delete_task_by_title_and_date(message)
+    if intent == "listar_tarefas":
+        return {
+            "intent": "listar_tarefas",
+            "data": None
+        }
 
-    parsed_task = parse_task_from_natural_input(message)
-    if parsed_task:
-        task_id = create_task(parsed_task["title"], parsed_task["description"], parsed_task["time"])
-        return f"Tarefa criada com sucesso com ID {task_id}!"
+    if intent == "atualizar_tarefa":
+        return parse_update_task(message)
 
-    if any(t in tokens for t in ["concluir", "finalizar", "completar"]):
-        id_match = re.search(r"\b[0-9a-f\-]{36}\b", message)
-        if id_match:
-            task_id = id_match.group()
-            mark_complete(task_id)
-            return f"Tarefa {task_id} concluída!"
-        return "Informe o ID da tarefa para marcá-la como concluída."
+    if intent == "deletar_tarefa":
+        return parse_delete_task(message)
 
-    return "Desculpe, não entendi. Você pode dizer algo como 'Tenho que ir ao dentista amanhã às 14 horas para uma obturação'."
+    if intent == "saudacao":
+        return {
+            "intent": "saudacao",
+            "data": {"text": "Olá! Em que posso ajudar?"}
+        }
 
-def list_tasks_by_date(date_str):
-    now = datetime.now()
-    if date_str == "amanhã":
-        target_day = now + timedelta(days=1)
-    elif date_str == "hoje":
-        target_day = now
-    elif match := re.search(r"dia (\d{1,2})", date_str):
-        day = int(match.group(1))
-        target_day = now.replace(day=day)
-    else:
-        return "Data não reconhecida."
+    if intent == "despedida":
+        return {
+            "intent": "despedida",
+            "data": {"text": "Até mais! Bom trabalho."}
+        }
 
-    start = target_day.replace(hour=0, minute=0, second=0, microsecond=0)
-    end = target_day.replace(hour=23, minute=59, second=59, microsecond=999999)
-
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT title, time, complete FROM tasks WHERE time BETWEEN %s AND %s ORDER BY time ASC", (start, end))
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    if not rows:
-        return f"Você não possui tarefas para {date_str}."
-
-    lines = []
-    for t in rows:
-        status = "✅" if t[2] else "🔘"
-        lines.append(f"{status} {t[0]} às {t[1].strftime('%H:%M')}")
-    return "\n".join(lines)
+    return {
+        "intent": "desconhecido",
+        "data": None,
+        "error": "Desculpe, não entendi."
+    }
 
 def parse_task_from_natural_input(message):
     try:
-        title_match = re.search(r"tenho que (.+?) (amanhã|hoje|dia \d{1,2})", message, re.IGNORECASE)
-        description_match = re.search(r"para (.+)$", message, re.IGNORECASE)
-        time_match = re.search(r"(\d{1,2})\s*(horas|h|h\.|hs)\b", message, re.IGNORECASE)
-        hour_words = {
-            "uma": 1, "duas": 2, "três": 3, "quatro": 4, "cinco": 5,
-            "seis": 6, "sete": 7, "oito": 8, "nove": 9, "dez": 10,
-            "onze": 11, "doze": 12
-        }
-        word_hour_match = re.search(r"(uma|duas|três|quatro|cinco|seis|sete|oito|nove|dez|onze|doze)\s*(da tarde|da manhã)?", message, re.IGNORECASE)
-
         now = datetime.now()
-        if "amanhã" in message:
-            task_date = now + timedelta(days=1)
-        elif "hoje" in message:
-            task_date = now
-        elif match := re.search(r"dia (\d{1,2})", message):
-            task_date = now.replace(day=int(match.group(1)))
-        else:
-            task_date = now
+        doc = nlp(message)
 
+        temp_date = None
+        temp_hour = None
+        temp_minute = None
+        description = message.strip()
+
+        if re.search(r'\bamanhã\b', message, re.IGNORECASE):
+            temp_date = (now + timedelta(days=1)).date()
+        elif re.search(r'\bhoje\b', message, re.IGNORECASE):
+            temp_date = now.date()
+
+        time_match = re.search(r'(\d{1,2})[:h](\d{0,2})', message)
         if time_match:
-            hour = int(time_match.group(1))
-        elif word_hour_match:
-            hour = hour_words.get(word_hour_match.group(1).lower(), 9)
-            if word_hour_match.group(2) and "tarde" in word_hour_match.group(2).lower():
-                if hour < 12:
-                    hour += 12
-        else:
-            hour = 9
+            temp_hour = int(time_match.group(1))
+            temp_minute = int(time_match.group(2)) if time_match.group(2) else 0
 
-        task_time = task_date.replace(hour=hour, minute=0, second=0, microsecond=0)
+        temp_date = temp_date or now.date()
+        temp_hour = temp_hour if temp_hour is not None else 9
+        temp_minute = temp_minute if temp_minute is not None else 0
+        task_time = datetime.combine(temp_date, time(temp_hour, temp_minute))
 
-        title = title_match.group(1).strip().capitalize() if title_match else "Compromisso"
-        description = description_match.group(1).strip().capitalize() if description_match else "Sem descrição"
+        # Limpeza de texto
+        description = re.sub(
+            r'\b(amanhã|hoje|às?\s*\d{1,2}h\d{0,2}|\bàs?\s*\d{1,2}[:h]\d{0,2}|\bas\b)\b',
+            '', description, flags=re.IGNORECASE
+        )
+        description = re.sub(r'^(vou|preciso|tenho que|devo|quero|favor|lembrar de|lembra de|tem que)\s+', '', description, flags=re.IGNORECASE)
+        description = re.sub(r'^(no|na|nos|nas|para|ao|aos|às|o|a)\s+', '', description, flags=re.IGNORECASE)
+
+        locais_chave = ["mercado", "padaria", "farmácia", "praia"]
+        title = ""
+
+        for local in locais_chave:
+            if re.search(rf'\b{local}\b', description, re.IGNORECASE):
+                title = local.capitalize()
+                description = re.sub(rf'\b{local}\b', '', description, flags=re.IGNORECASE).strip()
+                break
+
+        if not title:
+            for token in doc:
+                if token.pos_ in ["NOUN", "PROPN"] and token.text.lower() not in locais_chave:
+                    title = token.text.capitalize()
+                    break
+
+        if not title:
+            title = message.split()[0].capitalize()
+
+        description = re.sub(r'^(para|no|na|nos|nas|ao|aos|às|de|do|da|o|a)\s+', '', description, flags=re.IGNORECASE)
+        description = re.sub(r'\s+', ' ', description).strip()
+
+        if description.lower() == title.lower() or len(description.split()) <= 1:
+            description = ""
 
         return {
             "title": title,
             "description": description,
             "time": task_time.isoformat()
         }
-    except Exception:
+    except Exception as e:
+        print("Erro ao interpretar tarefa:", e)
         return None
 
-def create_task(title, description, time):
-    conn = get_connection()
-    cur = conn.cursor()
-    task_id = str(uuid.uuid4())
+def parse_update_task(message):
+    match = re.search(
+        r"(remarca|muda|altera|atualiza|editar|modifica|remarcar|mudar|alterar)\s+(?:tarefa\s+)?(?P<title>.+?)\s+(?:para|pra|to)\s+(?P<new_value>.+)",
+        message, re.IGNORECASE
+    )
+    if not match:
+        return {
+            "intent": "atualizar_tarefa",
+            "data": None,
+            "error": "Informe no formato: 'Atualizar [tarefa] para [novo horário]'"
+        }
 
-    cur.execute("""
-        INSERT INTO tasks (id, title, description, time, complete)
-        VALUES (%s, %s, %s, %s, %s)
-    """, (task_id, title, description, time, False))
+    title = match.group("title").strip()
+    new_value = match.group("new_value").strip()
 
-    conn.commit()
-    cur.close()
-    conn.close()
-    return task_id
-
-def list_tasks():
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT title, time, complete FROM tasks ORDER BY time ASC")
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    if not rows:
-        return "Você não possui tarefas no momento."
-
-    lines = []
-    for t in rows:
-        status = "✅" if t[2] else "🔘"
-        lines.append(f"{status} {t[0]} às {t[1].strftime('%d/%m %H:%M')}")
-    return "\n".join(lines)
-
-def mark_complete(task_id):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE tasks SET complete = true WHERE id = %s", (task_id,))
-    conn.commit()
-    cur.close()
-    conn.close()
-
-def update_task_by_title_and_date(message):
     try:
-        # Expressão regular para capturar variações na escrita
-        match = re.search(
-            r"(atualizar|modificar|editar)\s+(.+?)\s+(amanhã|hoje|dia\s+\d{1,2}),?\s+para\s+(.+?)(\s+às\s+(\d{1,2}:\d{2}))?",
-            message,
-            re.IGNORECASE
-        )
-        if not match:
-            return "Informe a tarefa no formato: 'Atualizar [título] [data], para [novo título] às [horário opcional]'."
-
-        old_title = match.group(2).strip()
-        date_str = match.group(3).lower()
-        new_title = match.group(4).strip()
-        new_time = match.group(6)  # Pode ser None se o horário não for informado
-
-        # Determinar a data da tarefa
-        now = datetime.now()
-        if date_str == "amanhã":
-            task_date = now + timedelta(days=1)
-        elif date_str == "hoje":
-            task_date = now
-        elif date_match := re.search(r"dia (\d{1,2})", date_str):
-            task_date = now.replace(day=int(date_match.group(1)))
-        else:
-            return "Data não reconhecida."
-
-        # Determinar o horário, se fornecido
-        if new_time:
-            hour, minute = map(int, new_time.split(":"))
-            task_time = task_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        else:
-            task_time = None
-
-        # Construir a query de atualização
-        updates = ["title = %s"]
-        params = [new_title]
-
-        if task_time:
-            updates.append("time = %s")
-            params.append(task_time)
-
-        params.extend([old_title, task_date.replace(hour=0, minute=0, second=0, microsecond=0), task_date.replace(hour=23, minute=59, second=59, microsecond=999999)])
-        query = f"UPDATE tasks SET {', '.join(updates)} WHERE title = %s AND time BETWEEN %s AND %s"
-
-        # Executar a atualização no banco de dados
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute(query, tuple(params))
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        return f"Tarefa '{old_title}' atualizada com sucesso para '{new_title}'!"
+        old_time = datetime.now()
+        new_time = parse_new_datetime(new_value, old_time)
+        return {
+            "intent": "atualizar_tarefa",
+            "data": {
+                "title": title,
+                "new_time": new_time.isoformat()
+            }
+        }
     except Exception as e:
-        return f"Erro ao atualizar a tarefa: {str(e)}"
+        return {
+            "intent": "atualizar_tarefa",
+            "data": None,
+            "error": f"Erro ao interpretar nova data: {str(e)}"
+        }
+
+def parse_delete_task(message):
+    match = re.search(r"(cancelar|excluir|deletar|remover)(?:\s+tarefa)?\s+(.*)", message, re.IGNORECASE)
+    if not match:
+        return {
+            "intent": "deletar_tarefa",
+            "data": None,
+            "error": "Informe qual tarefa deseja remover. Ex: 'Cancelar dentista'"
+        }
+    title = match.group(2).strip()
+    if title.lower().startswith("tarefa "):
+        title = title[7:].strip()
+    return {
+        "intent": "deletar_tarefa",
+        "data": {"title": title}
+    }
+
+def parse_new_datetime(new_value: str, reference_time: datetime) -> datetime:
+    doc = nlp(new_value.lower())
+    base_date = reference_time.date()
+    hour, minute = reference_time.hour, reference_time.minute
+
+    if "amanhã" in new_value.lower():
+        base_date = datetime.now().date() + timedelta(days=1)
+    elif "hoje" in new_value.lower():
+        base_date = datetime.now().date()
+    elif any(day in new_value.lower() for day in WEEKDAYS):
+        base_date = parse_weekday(new_value, reference_time)
+
+    time_match = re.search(r"(\d{1,2})[:h](\d{2})", new_value)
+    if time_match:
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2))
+
+    try:
+        if base_date == reference_time.date() and not time_match:
+            return date_parser.parse(new_value, dayfirst=True)
+    except:
+        pass
+
+    return datetime.combine(base_date, time(hour, minute))
+
+def parse_weekday(text: str, reference_time: datetime) -> date:
+    WEEKDAY_MAP = {
+        'segunda': 0, 'terça': 1, 'quarta': 2,
+        'quinta': 3, 'sexta': 4, 'sábado': 5, 'domingo': 6
+    }
+    today = reference_time.date()
+    today_weekday = today.weekday()
+
+    for day_name, day_idx in WEEKDAY_MAP.items():
+        if day_name in text.lower():
+            days_ahead = (day_idx - today_weekday) % 7
+            if "próxim" in text.lower() and days_ahead == 0:
+                days_ahead = 7
+            return today + timedelta(days=days_ahead)
+
+    return today
+
     
-def delete_task_by_title_and_date(message):
+
+def update_task_completion(message, user_id):
     try:
-        title_match = re.search(r"título (.+?) (amanhã|hoje|dia \d{1,2})", message, re.IGNORECASE)
-        if not title_match:
-            return "Informe o título e a data da tarefa que deseja deletar."
+        # Exemplo de mensagem: "Marcar tarefa comprar pão como completa"
+        match = re.search(r"(marcar|atualizar|definir)\s+tarefa\s+(.*?)\s+como\s+(completa|incompleta)", message, re.IGNORECASE)
+        if not match:
+            return "Informe no formato: 'Marcar tarefa [título] como completa/incompleta'"
 
-        title = title_match.group(1).strip()
-        date_str = title_match.group(2).lower()
+        title = match.group(2).strip()
+        status_str = match.group(3).strip().lower()
+        complete = True if status_str == "completa" else False
 
-        now = datetime.now()
-        if date_str == "amanhã":
-            task_date = now + timedelta(days=1)
-        elif date_str == "hoje":
-            task_date = now
-        elif match := re.search(r"dia (\d{1,2})", date_str):
-            task_date = now.replace(day=int(match.group(1)))
-        else:
-            return "Data não reconhecida."
+        task = get_task_by_title(user_id, title)
+        if not task:
+            return f"Tarefa '{title}' não encontrada."
 
-        start = task_date.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = task_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        updated = update_task_completion_status(task["id"], user_id, complete)
+        if not updated:
+            return f"Erro ao atualizar o status da tarefa '{title}'."
 
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute("DELETE FROM tasks WHERE title = %s AND time BETWEEN %s AND %s", (title, start, end))
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        return f"Tarefa '{title}' deletada com sucesso!"
+        return f"Tarefa '{title}' atualizada para {'completa' if complete else 'incompleta'}."
     except Exception as e:
-        return f"Erro ao deletar a tarefa: {str(e)}"
+        return f"Erro ao atualizar o status da tarefa: {str(e)}"

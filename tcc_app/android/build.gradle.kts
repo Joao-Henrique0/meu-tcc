@@ -4,9 +4,6 @@ buildscript {
         mavenCentral() 
         gradlePluginPortal() // Adiciona suporte a plugins externos
     }
-    dependencies {
-        classpath("com.google.gms:google-services:4.3.15")
-    }
 }
 
 allprojects {

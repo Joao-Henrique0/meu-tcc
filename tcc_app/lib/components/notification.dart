@@ -1,107 +1,166 @@
-// import 'dart:async';
-// import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-// import 'package:firebase_messaging/firebase_messaging.dart';
-// import 'package:flutter_timezone/flutter_timezone.dart';
-// import 'package:timezone/data/latest_all.dart' as tz;
-// import 'package:timezone/timezone.dart' as tz;
+import 'dart:async';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:shared_preferences/shared_preferences.dart';
 
-// class FirebaseNotificationService {
-//   static FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-//       FlutterLocalNotificationsPlugin();
-//   static StreamController<NotificationResponse> streamController =
-//       StreamController();
+typedef TaskCompleteCallback =
+    Future<void> Function(String taskId, bool complete);
 
-//   static Future<void> init() async {
-//     const AndroidInitializationSettings androidInit =
-//         AndroidInitializationSettings('@mipmap/ic_launcher');
-//     const InitializationSettings settings =
-//         InitializationSettings(android: androidInit);
+class LocalNotificationService {
+  static final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+  static final StreamController<NotificationResponse> streamController =
+      StreamController.broadcast();
 
-//     await flutterLocalNotificationsPlugin.initialize(
-//       settings,
-//       onDidReceiveNotificationResponse: (response) {
-//         streamController.add(response);
-//       },
-//       onDidReceiveBackgroundNotificationResponse: (response) {
-//         streamController.add(response);
-//       },
-//     );
+  static final Map<String, String> _taskIdMap = {}; // taskId → taskId
+  static TaskCompleteCallback? _onTaskComplete;
 
-//     FirebaseMessaging messaging = FirebaseMessaging.instance;
-//     await messaging.requestPermission();
+  static void registerOnTaskComplete(TaskCompleteCallback callback) {
+    _onTaskComplete = callback;
+  }
 
-//     String? token = await messaging.getToken();
-//     print("Token do dispositivo: $token");
+  static Future<void> onTap(NotificationResponse notificationResponse) async {
+    print("Notificação clicada ou ação: ${notificationResponse.actionId}");
 
-//     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-//       showInstantNotification(
-//         message.notification?.title ?? "Nova Notificação",
-//         message.notification?.body ?? "Você recebeu uma nova notificação",
-//       );
-//     });
+    final payload = notificationResponse.payload;
 
-//     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-//       print("Usuário abriu a notificação: ${message.notification?.title}");
-//     });
-//   }
+    // Caso seja o botão de ação
+    if (notificationResponse.actionId == 'concluir_tarefa') {
+      // Extrair o taskId do payload
+      if (payload != null && payload.startsWith("concluir|")) {
+        final parts = payload.split("|");
+        if (parts.length >= 2) {
+          final taskId = parts[1];
+          print("Concluir tarefa: $taskId");
 
-//   // 🔹 Notificação Local Agendada para Tarefas
-//   static void scheduleNotification(
-//       String title, String description, DateTime taskTime, String id) async {
-//     const AndroidNotificationDetails android = AndroidNotificationDetails(
-//       'scheduled_notification',
-//       'Task Notification',
-//       importance: Importance.max,
-//       priority: Priority.high,
-//       icon: '@mipmap/ic_launcher',
-//       enableVibration: true,
-//     );
+          if (_taskIdMap.containsKey(taskId)) {
+            await _onTaskComplete?.call(taskId, true); // Marcar como concluída
+            await cancelNotification(taskId.hashCode);
+            _taskIdMap.remove(taskId);
+          }
+        }
+      }
+    } else {
+      // Caso o usuário clique na notificação inteira (não no botão)
+      print("Usuário clicou na notificação em si.");
+    }
+  }
 
-//     const NotificationDetails details = NotificationDetails(android: android);
+  static Future<void> init() async {
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const settings = InitializationSettings(android: androidInit);
 
-//     tz.initializeTimeZones();
-//     final String currentTimeZone = await FlutterTimezone.getLocalTimezone();
-//     tz.setLocalLocation(tz.getLocation(currentTimeZone));
+    await flutterLocalNotificationsPlugin.initialize(
+      settings,
+      onDidReceiveNotificationResponse: onTap,
+      onDidReceiveBackgroundNotificationResponse: onTap,
+    );
 
-//     var scheduleTime = tz.TZDateTime.from(taskTime, tz.local)
-//         .subtract(const Duration(minutes: 10));
+    // Solicita permissão para notificações (Android 13+)
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.requestNotificationsPermission();
+  }
 
-//     if (scheduleTime.isBefore(tz.TZDateTime.now(tz.local))) {
-//       return;
-//     }
+  static Future<void> showScheduledRepeatingNotification({
+    required String title,
+    required String description,
+    required DateTime taskTime,
+    required String taskId,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final firstMinutes = prefs.getInt('first_notification') ?? 30;
+    final repeatMinutes = prefs.getInt('repeat_interval') ?? 20;
 
-//     await flutterLocalNotificationsPlugin.zonedSchedule(
-//       int.parse(id),
-//       'Tarefa: $title',
-//       description,
-//       scheduleTime,
-//       details,
-//       matchDateTimeComponents: DateTimeComponents.time, androidScheduleMode: AndroidScheduleMode.exact,
-//     );
-//   }
+    tz.initializeTimeZones();
+    final currentTimeZone = await FlutterTimezone.getLocalTimezone();
+    tz.setLocalLocation(tz.getLocation(currentTimeZone));
 
-//   // 🔹 Exibir Notificação Instantânea (Para Firebase)
-//   static void showInstantNotification(String title, String body) async {
-//     const AndroidNotificationDetails android = AndroidNotificationDetails(
-//       'firebase_notification',
-//       'Firebase Notifications',
-//       importance: Importance.max,
-//       priority: Priority.high,
-//       icon: '@mipmap/ic_launcher',
-//       enableVibration: true,
-//     );
+    final firstNotificationTime = tz.TZDateTime.from(
+      taskTime,
+      tz.local,
+    ).subtract(Duration(minutes: firstMinutes));
 
-//     const NotificationDetails details = NotificationDetails(android: android);
+    if (firstNotificationTime.isBefore(tz.TZDateTime.now(tz.local))) {
+      print("Horário inválido para agendamento.");
+      return;
+    }
 
-//     await flutterLocalNotificationsPlugin.show(
-//       0,
-//       title,
-//       body,
-//       details,
-//     );
-//   }
+    final notificationId = taskId.hashCode;
+    _taskIdMap[taskId] = taskId;
 
-//   static void cancelNotification(int id) async {
-//     await flutterLocalNotificationsPlugin.cancel(id);
-//   }
-// }
+    const androidDetails = AndroidNotificationDetails(
+      'scheduled_repeating_channel',
+      'Notificações Repetitivas',
+      channelDescription:
+          'Notificações que se repetem até a tarefa ser concluída',
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+      enableVibration: true,
+      actions: <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          'concluir_tarefa',
+          'Concluir Tarefa',
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+      ],
+    );
+
+    final details = NotificationDetails(android: androidDetails);
+
+    await flutterLocalNotificationsPlugin.zonedSchedule(
+      notificationId,
+      'Tarefa: $title',
+      description,
+      firstNotificationTime,
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      payload: 'concluir|$taskId',
+    );
+
+    // Repetir manualmente com Timer
+    Timer.periodic(Duration(minutes: repeatMinutes), (timer) async {
+      final pending =
+          await flutterLocalNotificationsPlugin.pendingNotificationRequests();
+      final stillExists = pending.any((n) => n.id == notificationId);
+      if (!stillExists) {
+        timer.cancel(); // tarefa foi concluída
+      } else {
+        await flutterLocalNotificationsPlugin.show(
+          notificationId,
+          'Tarefa: $title',
+          description,
+          details,
+          payload: 'concluir|$taskId',
+        );
+      }
+    });
+  }
+
+  static Future<void> showInstantNotification(String title, String body) async {
+    const android = AndroidNotificationDetails(
+      'firebase_notification',
+      'Firebase Notifications',
+      channelDescription: 'Notificações instantâneas do Firebase',
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+      enableVibration: true,
+      playSound: true,
+    );
+
+    const details = NotificationDetails(android: android);
+    await flutterLocalNotificationsPlugin.show(0, title, body, details);
+  }
+
+  static Future<void> cancelNotification(int id) async {
+    await flutterLocalNotificationsPlugin.cancel(id);
+    print("Notificação $id cancelada");
+  }
+}

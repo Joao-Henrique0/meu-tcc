@@ -8,5 +8,9 @@ string google_app_id
 string google_crash_reporting_api_key
 string google_storage_bucket
 string project_id
+string shortcut_long_label
+string shortcut_short_label
 style LaunchTheme
 style NormalTheme
+xml actions
+xml shortcuts

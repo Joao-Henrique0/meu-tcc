@@ -1,21 +1,32 @@
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:app_links/app_links.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tcc_app/components/chat_provider.dart';
 import 'package:tcc_app/components/notification.dart';
 import 'package:tcc_app/models/task_list.dart';
 import 'package:tcc_app/pages/chatbot_page.dart';
+import 'package:tcc_app/pages/login_page.dart';
+import 'package:tcc_app/pages/notification_settings.dart';
+import 'package:tcc_app/pages/register_page.dart';
 import 'package:tcc_app/pages/tabs_page.dart';
-import 'package:tcc_app/components/task_form.dart';
+import 'package:tcc_app/pages/task_form.dart';
 import 'package:tcc_app/theme/theme_provider.dart';
 import 'package:tcc_app/utils/app_routes.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
+import 'dart:async';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  // await FirebaseNotificationService.init();
+  await dotenv.load();
+  await LocalNotificationService.init();
+  await Supabase.initialize(
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+  );
   tz.initializeTimeZones();
+
   runApp(const MyApp());
 }
 
@@ -26,50 +37,64 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  late TaskList _taskList;
+  late AppLinks _appLinks;
+  StreamSubscription<Uri>? _sub;
+
   @override
   void initState() {
     super.initState();
-    ThemeProvider();
-    requestNotificationPermissions();
-    setupFirebaseMessaging();
-    getToken();
+    WidgetsBinding.instance.addObserver(this);
+    _taskList = TaskList();
+    _initDeepLinkListener();
   }
 
-  Future<void> requestNotificationPermissions() async {
-    FirebaseMessaging messaging = FirebaseMessaging.instance;
-
-    NotificationSettings settings = await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
+  void _initDeepLinkListener() {
+    _appLinks = AppLinks();
+    _sub = _appLinks.uriLinkStream.listen(
+      (Uri? uri) {
+        if (uri != null &&
+            uri.scheme == 'myapp' &&
+            uri.host == 'abrir_funcionalidade') {
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const TaskForm()));
+        }
+      },
+      onError: (err) {
+        // tratar erros
+      },
     );
+  }
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      print("Permissão concedida!");
-    } else {
-      print("Permissão negada.");
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      if (!mounted) return;
+      await _taskList.backupTasksToSupabase();
+      debugPrint("Backup automático realizado ao sair do app.");
     }
-  }
-
-  void setupFirebaseMessaging() {
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print("Nova notificação: ${message.notification?.title}");
-      // Aqui você pode exibir um alerta ou outra ação
-    });
-  }
-
-  Future<void> getToken() async {
-    String? token = await FirebaseMessaging.instance.getToken();
-    print("Token do dispositivo: $token");
   }
 
   @override
   Widget build(BuildContext context) {
+    LocalNotificationService.registerOnTaskComplete(
+      _taskList.updateTaskComplete,
+    );
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<TaskList>(create: (_) => TaskList()),
+        ChangeNotifierProvider<TaskList>.value(value: _taskList),
         ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider<ChatProvider>(create: (_) => ChatProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
@@ -80,6 +105,15 @@ class _MyAppState extends State<MyApp> {
               AppRoutes.home: (ctx) => const TabsScreen(),
               AppRoutes.taskForm: (ctx) => const TaskForm(),
               AppRoutes.chatBot: (ctx) => ChatbotScreen(),
+              AppRoutes.login: (ctx) => const LoginPage(),
+              AppRoutes.register: (ctx) => const RegisterPage(),
+              AppRoutes.notiSettings: (ctx) => const NotificationSettings(),
+            },
+            onGenerateRoute: (settings) {
+              if (settings.name == '/abrir_funcionalidade') {
+                return MaterialPageRoute(builder: (_) => const TaskForm());
+              }
+              return null;
             },
             debugShowCheckedModeBanner: false,
           );

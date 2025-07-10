@@ -6,6 +6,8 @@
     <string name="google_crash_reporting_api_key" translatable="false">AIzaSyAbilguUzBFViqvRm64iscDWBC6niDOvfA</string>
     <string name="google_storage_bucket" translatable="false">tcc2-3380e.firebasestorage.app</string>
     <string name="project_id" translatable="false">tcc2-3380e</string>
+    <string name="shortcut_long_label">Abrir tela de nova tarefa</string>
+    <string name="shortcut_short_label">Adicionar tarefa</string>
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
         
         <item name="android:windowBackground">@drawable/launch_background</item>

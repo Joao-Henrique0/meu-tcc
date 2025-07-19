@@ -3,9 +3,9 @@ from datetime import datetime, time, timedelta, date
 from .nlp.intent_predictor import predict_intent
 import spacy
 from dateutil import parser as date_parser
+import dateparser
 
 nlp = spacy.load("pt_core_news_sm")
-WEEKDAYS = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo']
 
 def handle_message(message, user_id):
     intent, confidence = predict_intent(message)
@@ -30,10 +30,18 @@ def handle_message(message, user_id):
         }
 
     if intent == "atualizar_tarefa":
-        return parse_update_task(message)
+        return {
+            "intent": "atualizar_tarefa",
+            "data": parse_update_task(message),
+            "error": None if parse_update_task(message) else "Não foi possível interpretar a atualização da tarefa."
+        }
 
     if intent == "deletar_tarefa":
-        return parse_delete_task(message)
+        return {
+            "intent": "deletar_tarefa",
+            "data": parse_delete_task(message),
+            "error": None if parse_delete_task(message) else "Não foi possível interpretar a exclusão da tarefa."
+        }
 
     if intent == "saudacao":
         return {
@@ -44,7 +52,7 @@ def handle_message(message, user_id):
     if intent == "despedida":
         return {
             "intent": "despedida",
-            "data": {"text": "Até mais! Bom trabalho."}
+            "data": {"text": "Até mais!."}
         }
 
     return {
@@ -53,59 +61,107 @@ def handle_message(message, user_id):
         "error": "Desculpe, não entendi."
     }
 
+PERIODS_OF_THE_DAY = {
+    "manhã": time(9, 0),
+    "tarde": time(14, 0),
+    "noite": time(19, 0),
+    "almoço": time(12, 0),
+    "jantar": time(20, 0),
+}
+
+RELATIVE_EXPRESSIONS = {
+    "depois de amanhã": timedelta(days=2),
+    "amanhã": timedelta(days=1),
+    "hoje": timedelta(days=0),
+    "ontem": timedelta(days=-1),
+    "semana que vem": timedelta(days=7),
+    "próxima semana": timedelta(days=7),
+}
+
+KEY_LOCATIONS = [
+    "mercado", "padaria", "farmácia", "praia", "academia",
+    "escola", "trabalho", "shopping", "cinema", "parque"
+]
+
+def adjust_period_of_day(message: str, base_datetime: datetime) -> datetime:
+    for periodo, horario in PERIODS_OF_THE_DAY.items():
+        if re.search(rf"\b{periodo}\b", message, re.IGNORECASE):
+            return base_datetime.replace(hour=horario.hour, minute=horario.minute)
+    return base_datetime
+
+def apply_relative_expression(message: str) -> datetime | None:
+    now = datetime.now()
+    for expressao, delta in RELATIVE_EXPRESSIONS.items():
+        if expressao in message.lower():
+            return now + delta
+    return None
+
+def clear_text(texto: str) -> str:
+    texto = texto.strip()
+    texto = re.sub(
+        r'\b(amanhã|hoje|depois de amanhã|ontem|semana que vem|próxima semana|à noite|de manhã|à tarde|de tarde|ao meio-dia|às?\s*\d{1,2}[:h]?\d{0,2}?)\b',
+        '', texto, flags=re.IGNORECASE
+    )
+    texto = re.sub(r'\b(vou|preciso|tenho que|devo|quero|favor|lembrar de|lembra de|anotar|tem que|marcar|ir ao|ir à|passar no|comprar no)\b',
+                   '', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'\b(no|na|nos|nas|ao|aos|às|o|a|de|do|da)\b', '', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'\s+', ' ', texto).strip()
+    return texto
+
+def extract_datetime(message: str) -> datetime:
+    dt_base = apply_relative_expression(message)
+    if not dt_base:
+        dt_base = dateparser.parse(message, languages=['pt']) or datetime.now()
+
+    # Ajusta o período do dia se houver palavras-chave
+    dt_ajustado = adjust_period_of_day(message, dt_base)
+
+    # Extração manual de hora/minuto se houver "às", "as", ":" ou "h"
+    hora_match = re.search(r"(?:às|as)?\s*(\d{1,2})[:h]?(\d{0,2})", message)
+    if hora_match:
+        hour = int(hora_match.group(1))
+        minute = int(hora_match.group(2)) if hora_match.group(2) else 0
+        dt_ajustado = dt_ajustado.replace(hour=hour, minute=minute)
+    elif dt_ajustado.hour == 0 and "às" not in message and ":" not in message and "h" not in message:
+        dt_ajustado = dt_ajustado.replace(hour=9, minute=0)  # default: 9h
+
+    return dt_ajustado
+
+
+def extract_location(doc, texto):
+    # Primeiro tenta por entidade do spaCy
+    for ent in doc.ents:
+        if ent.label_ == "LOC":
+            return ent.text.capitalize()
+
+    # Fallback com regex por palavras-chave conhecidas
+    for local in KEY_LOCATIONS:
+        if re.search(rf'\b{local}\b', texto, re.IGNORECASE):
+            return local.capitalize()
+
+    return None
+
+def extract_title(doc, texto):
+    local = extract_location(doc, texto)
+    if local:
+        return local
+
+    for token in doc:
+        if token.dep_ in ["obj", "ROOT"] and token.pos_ in ["NOUN", "PROPN"]:
+            return token.text.capitalize()
+
+    for token in doc:
+        if token.pos_ in ["NOUN", "PROPN"]:
+            return token.text.capitalize()
+
+    return texto.split()[0].capitalize()
+
 def parse_task_from_natural_input(message):
     try:
-        now = datetime.now()
-        doc = nlp(message)
-
-        temp_date = None
-        temp_hour = None
-        temp_minute = None
-        description = message.strip()
-
-        if re.search(r'\bamanhã\b', message, re.IGNORECASE):
-            temp_date = (now + timedelta(days=1)).date()
-        elif re.search(r'\bhoje\b', message, re.IGNORECASE):
-            temp_date = now.date()
-
-        time_match = re.search(r'(\d{1,2})[:h](\d{0,2})', message)
-        if time_match:
-            temp_hour = int(time_match.group(1))
-            temp_minute = int(time_match.group(2)) if time_match.group(2) else 0
-
-        temp_date = temp_date or now.date()
-        temp_hour = temp_hour if temp_hour is not None else 9
-        temp_minute = temp_minute if temp_minute is not None else 0
-        task_time = datetime.combine(temp_date, time(temp_hour, temp_minute))
-
-        # Limpeza de texto
-        description = re.sub(
-            r'\b(amanhã|hoje|às?\s*\d{1,2}h\d{0,2}|\bàs?\s*\d{1,2}[:h]\d{0,2}|\bas\b)\b',
-            '', description, flags=re.IGNORECASE
-        )
-        description = re.sub(r'^(vou|preciso|tenho que|devo|quero|favor|lembrar de|lembra de|tem que)\s+', '', description, flags=re.IGNORECASE)
-        description = re.sub(r'^(no|na|nos|nas|para|ao|aos|às|o|a)\s+', '', description, flags=re.IGNORECASE)
-
-        locais_chave = ["mercado", "padaria", "farmácia", "praia"]
-        title = ""
-
-        for local in locais_chave:
-            if re.search(rf'\b{local}\b', description, re.IGNORECASE):
-                title = local.capitalize()
-                description = re.sub(rf'\b{local}\b', '', description, flags=re.IGNORECASE).strip()
-                break
-
-        if not title:
-            for token in doc:
-                if token.pos_ in ["NOUN", "PROPN"] and token.text.lower() not in locais_chave:
-                    title = token.text.capitalize()
-                    break
-
-        if not title:
-            title = message.split()[0].capitalize()
-
-        description = re.sub(r'^(para|no|na|nos|nas|ao|aos|às|de|do|da|o|a)\s+', '', description, flags=re.IGNORECASE)
-        description = re.sub(r'\s+', ' ', description).strip()
+        task_time = extract_datetime(message)
+        description = clear_text(message)
+        doc_limpo = nlp(description)
+        title = extract_title(doc_limpo, description)
 
         if description.lower() == title.lower() or len(description.split()) <= 1:
             description = ""
@@ -115,15 +171,18 @@ def parse_task_from_natural_input(message):
             "description": description,
             "time": task_time.isoformat()
         }
+
     except Exception as e:
         print("Erro ao interpretar tarefa:", e)
         return None
 
 def parse_update_task(message):
+    # Captura título e novo valor com mais flexibilidade
     match = re.search(
-        r"(remarca|muda|altera|atualiza|editar|modifica|remarcar|mudar|alterar)\s+(?:tarefa\s+)?(?P<title>.+?)\s+(?:para|pra|to)\s+(?P<new_value>.+)",
+        r"(remarca|muda|altera|atualiza|editar|modifica|remarcar|mudar|alterar)\s+(?:a\s+)?(?:tarefa\s+)?(?P<title>.+?)\s+(?:para|pra|to)\s+(?P<new_value>.+)",
         message, re.IGNORECASE
     )
+
     if not match:
         return {
             "intent": "atualizar_tarefa",
@@ -135,8 +194,9 @@ def parse_update_task(message):
     new_value = match.group("new_value").strip()
 
     try:
-        old_time = datetime.now()
-        new_time = parse_new_datetime(new_value, old_time)
+        # Usa a mesma função de extração de data/hora da tarefa principal
+        new_time = extract_datetime(new_value)
+
         return {
             "intent": "atualizar_tarefa",
             "data": {
@@ -151,85 +211,68 @@ def parse_update_task(message):
             "error": f"Erro ao interpretar nova data: {str(e)}"
         }
 
+
 def parse_delete_task(message):
-    match = re.search(r"(cancelar|excluir|deletar|remover)(?:\s+tarefa)?\s+(.*)", message, re.IGNORECASE)
+    match = re.search(
+        r"\b(cancelar|excluir|deletar|remover)\b\s*(?:a\s+)?(?:tarefa\s+)?(?P<title>.+)",
+        message, re.IGNORECASE
+    )
+
     if not match:
         return {
             "intent": "deletar_tarefa",
             "data": None,
             "error": "Informe qual tarefa deseja remover. Ex: 'Cancelar dentista'"
         }
-    title = match.group(2).strip()
-    if title.lower().startswith("tarefa "):
-        title = title[7:].strip()
+
+    title = match.group("title").strip()
+
+    # Evita inputs como apenas "tarefa" ou "a"
+    if not title or title.lower() in ["tarefa", "a tarefa", "a"]:
+        return {
+            "intent": "deletar_tarefa",
+            "data": None,
+            "error": "O nome da tarefa está incompleto. Ex: 'Excluir mercado'"
+        }
+
     return {
         "intent": "deletar_tarefa",
         "data": {"title": title}
     }
 
-def parse_new_datetime(new_value: str, reference_time: datetime) -> datetime:
-    doc = nlp(new_value.lower())
-    base_date = reference_time.date()
-    hour, minute = reference_time.hour, reference_time.minute
-
-    if "amanhã" in new_value.lower():
-        base_date = datetime.now().date() + timedelta(days=1)
-    elif "hoje" in new_value.lower():
-        base_date = datetime.now().date()
-    elif any(day in new_value.lower() for day in WEEKDAYS):
-        base_date = parse_weekday(new_value, reference_time)
-
-    time_match = re.search(r"(\d{1,2})[:h](\d{2})", new_value)
-    if time_match:
-        hour = int(time_match.group(1))
-        minute = int(time_match.group(2))
-
-    try:
-        if base_date == reference_time.date() and not time_match:
-            return date_parser.parse(new_value, dayfirst=True)
-    except:
-        pass
-
-    return datetime.combine(base_date, time(hour, minute))
-
-def parse_weekday(text: str, reference_time: datetime) -> date:
-    WEEKDAY_MAP = {
-        'segunda': 0, 'terça': 1, 'quarta': 2,
-        'quinta': 3, 'sexta': 4, 'sábado': 5, 'domingo': 6
-    }
-    today = reference_time.date()
-    today_weekday = today.weekday()
-
-    for day_name, day_idx in WEEKDAY_MAP.items():
-        if day_name in text.lower():
-            days_ahead = (day_idx - today_weekday) % 7
-            if "próxim" in text.lower() and days_ahead == 0:
-                days_ahead = 7
-            return today + timedelta(days=days_ahead)
-
-    return today
-
     
 
 def update_task_completion(message, user_id):
     try:
-        # Exemplo de mensagem: "Marcar tarefa comprar pão como completa"
-        match = re.search(r"(marcar|atualizar|definir)\s+tarefa\s+(.*?)\s+como\s+(completa|incompleta)", message, re.IGNORECASE)
+        # Exemplo de mensagem: "Atualizar tarefa comprar pão para completa"
+        match = re.search(
+            r"(atualizar)\s+tarefa\s+(.*?)\s+para\s+(completa|incompleta)",
+            message, re.IGNORECASE
+        )
         if not match:
-            return "Informe no formato: 'Marcar tarefa [título] como completa/incompleta'"
+            return {
+                "intent": "atualizar_tarefa",
+                "data": None,
+                "error": "Informe no formato: 'Atualizar tarefa [título] para completa/incompleta'"
+            }
 
         title = match.group(2).strip()
         status_str = match.group(3).strip().lower()
         complete = True if status_str == "completa" else False
 
-        task = get_task_by_title(user_id, title)
-        if not task:
-            return f"Tarefa '{title}' não encontrada."
-
-        updated = update_task_completion_status(task["id"], user_id, complete)
-        if not updated:
-            return f"Erro ao atualizar o status da tarefa '{title}'."
-
-        return f"Tarefa '{title}' atualizada para {'completa' if complete else 'incompleta'}."
+        # Aqui você pode implementar a lógica de atualização diretamente no frontend ou em memória.
+        # Exemplo de retorno esperado:
+        return {
+            "intent": "atualizar_tarefa",
+            "data": {
+                "title": title,
+                "complete": complete
+            },
+            "error": None
+        }
     except Exception as e:
-        return f"Erro ao atualizar o status da tarefa: {str(e)}"
+        return {
+            "intent": "atualizar_tarefa",
+            "data": None,
+            "error": f"Erro ao atualizar o status da tarefa: {str(e)}"
+        }

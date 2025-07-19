@@ -58,9 +58,6 @@ class TaskList with ChangeNotifier {
     } else {
       await addTask(task);
     }
-    print("Task saved: ${task.title} at ${task.time}");
-    print("Task ID: ${task.id}");
-    print(task);
   }
 
   Future<void> addTask(Task task) async {
@@ -85,6 +82,7 @@ class TaskList with ChangeNotifier {
     notifyListeners();
 
     // Agenda a notificação com o id correto
+    print("tasktime: ${newTask.time}");
     LocalNotificationService.showScheduledRepeatingNotification(
       title: newTask.title,
       description: newTask.description,
@@ -122,19 +120,20 @@ class TaskList with ChangeNotifier {
       _tasks.removeAt(index);
       notifyListeners();
       await DbUtil.deleteData(task.id);
+      // Remove a notificação atrelada à tarefa
+      await LocalNotificationService.cancelNotification(task.id.hashCode);
     }
   }
 
   Future<void> updateTaskComplete(String taskId, bool complete) async {
-    // Atualiza o status de conclusão da tarefa no banco de dados
-    await DbUtil.updateComplete(taskId, complete);
-
     // Atualiza a tarefa na lista em memória
     final taskIndex = _tasks.indexWhere((task) => task.id == taskId);
     if (taskIndex >= 0) {
       _tasks[taskIndex].complete = complete;
       notifyListeners();
     }
+    // Atualiza o status de conclusão da tarefa no banco de dados
+    await DbUtil.updateComplete(taskId, complete);
   }
 
   Future<void> backupTasksToSupabase() async {

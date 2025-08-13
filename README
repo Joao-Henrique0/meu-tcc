@@ -24,10 +24,10 @@ O sistema é composto por:
 
 1. **Clone o repositório**
 
-   ```bash
-   git clone https://github.com/Joao-Henrique0/meu-tcc.git
-   cd TCC
-   ```
+```bash
+git clone https://github.com/Joao-Henrique0/meu-tcc.git
+cd TCC
+```
 
 ---
 
@@ -35,32 +35,32 @@ O sistema é composto por:
 
 2. **Acesse a pasta do app**
 
-   ```bash
-   cd tcc_app
-   ```
+```bash
+cd tcc_app
+```
 
 3. **Instale as dependências**
 
-   ```bash
-   flutter pub get
-   ```
+```bash
+flutter pub get
+```
 
 4. **Configure as variáveis de ambiente**
 
-   Crie um arquivo `.env` na raiz da pasta `tcc_app` com o seguinte conteúdo:
+Crie um arquivo `.env` na raiz da pasta `tcc_app` com o seguinte conteúdo:
 
-   ```properties
-   SUPABASE_URL=coloque_aqui_o_url_do_supabase
-   SUPABASE_ANON_KEY=coloque_aqui_o_anon_key_do_supabase
-   ```
+```properties
+SUPABASE_URL=coloque_aqui_o_url_do_supabase
+SUPABASE_ANON_KEY=coloque_aqui_o_anon_key_do_supabase
+```
 
-   > **Atenção:** Nunca compartilhe sua chave `anonKey` publicamente.
+> **Atenção:** Nunca compartilhe sua chave `anonKey` publicamente.
 
 5. **Execute o app**
 
-   ```bash
-   flutter run
-   ```
+```bash
+flutter run
+```
 
 ---
 
@@ -70,30 +70,30 @@ O sistema é composto por:
 
 1. **Acesse a pasta do backend**
 
-   ```bash
-   cd ../back-end
-   ```
+```bash
+cd ../back-end
+```
 
 2. **Crie e ative um ambiente virtual**
 
-   ```bash
-   python -m venv venv
-   venv\Scripts\activate   # Windows
-   # ou
-   source venv/bin/activate   # Linux/macOS
-   ```
+```bash
+python -m venv venv
+venv\Scripts\activate   # Windows
+# ou
+source venv/bin/activate   # Linux/macOS
+```
 
 3. **Instale as dependências**
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+pip install -r requirements.txt
+```
 
 4. **Execute o backend**
 
-    ```bash
-    python main.py
-    ```
+```bash
+python main.py
+```
 
 ---
 
@@ -125,11 +125,11 @@ O sistema é composto por:
 - No painel do Supabase, vá em **Table Editor**.
 - Clique em **New Table** e crie uma tabela, por exemplo, chamada `tasks` com os campos que desejar, por exemplo:
 
-  - `id` (UUID, Primary Key)
-  - `user_id` (UUID, referência ao usuário)
-  - `title` (text)
-  - `description` (text)
-  - `created_at` (timestamp)
+- `id` (UUID, Primary Key)
+- `user_id` (UUID, referência ao usuário)
+- `title` (text)
+- `description` (text)
+- `created_at` (timestamp)
 
 - Clique em **Save** para criar a tabela.
 

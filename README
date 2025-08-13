@@ -1,6 +1,6 @@
 # App de Gerenciamento de Tarefas com Chatbot e NLP
 
-Este projeto é um aplicativo de gerenciamento de tarefas integrado a um chatbot inteligente, que permite a criação, atualização, exclusão e listagem de tarefas por comandos de voz ou texto em linguagem natural. 
+Este projeto é um aplicativo de gerenciamento de tarefas integrado a um chatbot inteligente, que permite a criação, atualização, exclusão e listagem de tarefas por comandos de voz ou texto em linguagem natural.  
 
 O sistema é composto por:
 
@@ -11,18 +11,18 @@ O sistema é composto por:
 
 ---
 
-## Pré-requisitos
+## 📋 Pré-requisitos
 
 - [Flutter](https://docs.flutter.dev/get-started/install) instalado na máquina
 - [Git](https://git-scm.com/downloads)
-- [Python 3.10+](https://www.python.org/downloads/) para o backend
+- [Python 3.10+](https://www.python.org/downloads/) para o back-end
 - Editor recomendado: [VS Code](https://code.visualstudio.com/)
 
 ---
 
-## Como clonar e rodar o projeto
+## 🚀 Como clonar e rodar o projeto
 
-1. **Clone o repositório**
+### 1. Clone o repositório
 
 ```bash
 git clone https://github.com/Joao-Henrique0/meu-tcc.git

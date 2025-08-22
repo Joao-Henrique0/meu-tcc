@@ -1,0 +1,16 @@
+Categoria,Subcategoria/Metrica,Valor Medio,Desvio/Erro,Tipo,Observacao
+PLN,Precisão - Classificação de intenções,0.86,,Treino/Teste,200 mensagens
+PLN,Revocação - Classificação de intenções,0.80,,Treino/Teste,200 mensagens
+PLN,F1-score - Classificação de intenções,0.83,,Treino/Teste,200 mensagens
+PLN,Precisão - Extração de entidades,0.82,,Treino/Teste,200 mensagens
+PLN,Revocação - Extração de entidades,0.76,,Treino/Teste,200 mensagens
+PLN,F1-score - Extração de entidades,0.79,,Treino/Teste,200 mensagens
+Usabilidade,Tempo médio criação tarefa (Conversacional),5.2,4.1,Interface,Em segundos
+Usabilidade,Tempo médio criação tarefa (Tradicional),10.8,5.0,Interface,Em segundos
+Usabilidade,Variação de tempo,-54,,Interface,Comparação Conversacional vs Tradicional (%)
+Usabilidade,Taxa de erros interpretação (Conversacional),10.4,,Interface,Percentual
+Usabilidade,Taxa de erros interpretação (Tradicional),0,,Interface,Percentual
+Performance,Tempo de resposta da API,220,40,Backend,Em ms
+Performance,Latência PLN (classificação + extração),150,30,Backend,Em ms
+Performance,Renderização inicial do app,1.2,0.3,App,Em segundos
+Performance,Uso de memória do app,120,25,App,Em
